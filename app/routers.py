@@ -1,11 +1,16 @@
 """RG Lighthouse API Endpoints."""
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from typing import Dict, Any, List, Optional
 
 from .peer_registry import peer_registry
 from .discovery_server import discovery_server
+from .auth_middleware import (
+    AuthenticatedUser,
+    get_current_user,
+    check_rate_limit,
+)
 
 router = APIRouter(prefix="/lighthouse", tags=["lighthouse"])
 
@@ -37,7 +42,8 @@ class DiscoverRequest(BaseModel):
 
 
 @router.post("/register")
-async def register_peer(req: PeerRegisterRequest):
+async def register_peer(req: PeerRegisterRequest, user: AuthenticatedUser = Depends(get_current_user)):
+    check_rate_limit(user.user_id or req.peer_id, "register")
     try:
         peer = await peer_registry.register(
             peer_id=req.peer_id, peer_type=req.peer_type,
@@ -52,7 +58,8 @@ async def register_peer(req: PeerRegisterRequest):
 
 
 @router.post("/heartbeat")
-async def heartbeat(req: HeartbeatRequest):
+async def heartbeat(req: HeartbeatRequest, user: AuthenticatedUser = Depends(get_current_user)):
+    check_rate_limit(user.user_id or req.peer_id, "heartbeat")
     ok = await peer_registry.heartbeat(req.peer_id, req.chain_height, req.consensus_role)
     if not ok:
         raise HTTPException(status_code=404, detail="Peer not registered")
@@ -60,7 +67,8 @@ async def heartbeat(req: HeartbeatRequest):
 
 
 @router.post("/discover")
-async def discover_peers(req: DiscoverRequest):
+async def discover_peers(req: DiscoverRequest, user: AuthenticatedUser = Depends(get_current_user)):
+    check_rate_limit(user.user_id or "anon", "discover")
     peers = peer_registry.discover_peers(
         peer_type=req.peer_type, limit=req.limit,
         exclude=req.exclude, miner_class=req.miner_class,
@@ -69,7 +77,8 @@ async def discover_peers(req: DiscoverRequest):
 
 
 @router.post("/deregister/{peer_id}")
-async def deregister_peer(peer_id: str):
+async def deregister_peer(peer_id: str, user: AuthenticatedUser = Depends(get_current_user)):
+    check_rate_limit(user.user_id or "anon", "default")
     ok = await peer_registry.deregister(peer_id)
     if not ok:
         raise HTTPException(status_code=404, detail="Peer not found")
@@ -77,19 +86,21 @@ async def deregister_peer(peer_id: str):
 
 
 @router.post("/ban/{peer_id}")
-async def ban_peer(peer_id: str, reason: str = ""):
+async def ban_peer(peer_id: str, reason: str = "", user: AuthenticatedUser = Depends(get_current_user)):
+    if not user.is_admin() and user.auth_method != "dev":
+        raise HTTPException(status_code=403, detail="Admin role required to ban peers")
     await peer_registry.ban_peer(peer_id, reason)
     return {"status": "banned"}
 
 
 @router.get("/peers")
-async def list_peers(peer_type: Optional[str] = None):
+async def list_peers(peer_type: Optional[str] = None, user: AuthenticatedUser = Depends(get_current_user)):
     peers = peer_registry.discover_peers(peer_type=peer_type, limit=100)
     return {"peers": peers, "count": len(peers)}
 
 
 @router.get("/peers/{peer_id}")
-async def get_peer(peer_id: str):
+async def get_peer(peer_id: str, user: AuthenticatedUser = Depends(get_current_user)):
     peer = peer_registry.peers.get(peer_id)
     if not peer:
         raise HTTPException(status_code=404, detail="Peer not found")
@@ -97,22 +108,22 @@ async def get_peer(peer_id: str):
 
 
 @router.get("/validators")
-async def list_validators():
+async def list_validators(user: AuthenticatedUser = Depends(get_current_user)):
     return {"validators": peer_registry.get_validators()}
 
 
 @router.get("/miners")
-async def list_miners(miner_class: Optional[str] = None):
+async def list_miners(miner_class: Optional[str] = None, user: AuthenticatedUser = Depends(get_current_user)):
     return {"miners": peer_registry.get_miners(miner_class)}
 
 
 @router.get("/chain-nodes")
-async def list_chain_nodes():
+async def list_chain_nodes(user: AuthenticatedUser = Depends(get_current_user)):
     return {"chain_nodes": peer_registry.get_chain_nodes()}
 
 
 @router.get("/stats")
-async def get_stats():
+async def get_stats(user: AuthenticatedUser = Depends(get_current_user)):
     return {**discovery_server.get_stats(), "registry": peer_registry.get_stats()}
 
 
