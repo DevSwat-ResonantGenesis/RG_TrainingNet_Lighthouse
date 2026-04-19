@@ -1,6 +1,15 @@
-# RG Lighthouse
+# RG_TrainingNet_Lighthouse
 
-The **bootstrap/discovery node** for the ResonantGenesis decentralized network. Every new node (miner, chain node, validator) contacts a Lighthouse first to discover peers and join the mesh.
+The **bootstrap/discovery node** for the Training Network. Every new node (miner, chain node, validator) contacts a Lighthouse first to discover peers and join the mesh.
+
+> **Part of the Training Network** (3 repos):
+> - **RG_TrainingNet_Chain** — Raft consensus chain, block production
+> - **RG_TrainingNet_Mining** — Gradient aggregation, sharded training, RGT rewards
+> - **RG_TrainingNet_Lighthouse** (this) — Peer discovery, network beacon
+
+> **Not to be confused with:**
+> - **RG_DSID_Blockchain** — Internal audit/governance ledger (completely separate chain)
+> - **RG_DSID_Node** — DSID execution layer (agent runtime, not training)
 
 ## Role in the Architecture
 
@@ -19,8 +28,8 @@ The **bootstrap/discovery node** for the ResonantGenesis decentralized network. 
 
 | Module | Depends On Lighthouse |
 |--------|----------------------|
-| **RG_Mining** | Miners register here to discover tasks + validators |
-| **RG_external_blockchain** | Chain nodes register here to discover consensus peers |
+| **RG_TrainingNet_Mining** | Miners register here to discover tasks + validators |
+| **RG_TrainingNet_Chain** | Chain nodes register here to discover consensus peers |
 
 ## Components
 
